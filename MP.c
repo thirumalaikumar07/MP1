@@ -35,7 +35,7 @@ Flight flights[4] = {
     {101, "Air India", "Chennai → Delhi", 0},
     {102, "IndiGo", "Coimbatore → Mumbai", 0},
     {103, "SpiceJet", "Bangalore → Kolkata", 0},
-    {104, "Vistara", "Madurai → Hyderabad", 0}
+    {104, "Vistara", "Madurai → viaz", 0}
 };
 
 Passenger *head = NULL;
