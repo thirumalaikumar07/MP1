@@ -1,6 +1,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
+
+#ifdef _WIN32
+  #include <windows.h>
+  #define strcasecmp _stricmp
+#else
+  #include <unistd.h>
+  #include <strings.h>
+#endif
 
 #define MAX_SEATS 20
 
@@ -16,12 +25,14 @@ typedef struct Passenger {
     float amount;
 
     int isStudent;
+    float discountPercent;
+    char seatNumber[10];
+
     char collegeName[100];
     char collegeRoll[20];
     char collegeDistrict[50];
     char collegeState[50];
 
-    // Payment details
     char paymentMethod[30];
     char upiID[50];
     char bankName[50];
@@ -38,7 +49,6 @@ typedef struct Flight {
     int bookedSeats;
 } Flight;
 
-/* initial flights */
 Flight flights[4] = {
     {101, "Air India", "Chennai → Delhi", 0},
     {102, "IndiGo", "Coimbatore → Mumbai", 0},
@@ -49,256 +59,342 @@ Flight flights[4] = {
 Passenger *head = NULL;
 int nextPassengerID = 1;
 
-/* -------------------- Input helpers -------------------- */
-void readLine(char *buf, int size) {
-    if(fgets(buf, size, stdin) == NULL) {
-        buf[0] = '\0';
-        return;
-    }
-    buf[strcspn(buf, "\n")] = '\0';
+void readLine(char *b, int s){
+    if (!fgets(b, s, stdin)) { b[0]=0; return; }
+    b[strcspn(b,"\n")] = 0;
 }
 
-/* read integer robustly using fgets+sscanf */
 int readInt() {
-    char tmp[128];
-    int val = 0;
-    while(1) {
-        if(fgets(tmp, sizeof(tmp), stdin) == NULL) return 0;
-        if(sscanf(tmp, "%d", &val) == 1) return val;
-        printf("Invalid input. Enter a number: ");
+    char buf[50];
+    int x;
+    while (1) {
+        if (!fgets(buf,50,stdin)) return 0;
+        if (sscanf(buf,"%d",&x)==1) return x;
+        printf("Invalid input! Enter again: ");
     }
 }
 
-/* -------------------- Fare calc -------------------- */
-float calculateAmount(char *classType, char *tripType, int isStudent, int age) {
-    float base = 0;
-    if(strcmp(classType,"Economy")==0) base = 3000;
-    else if(strcmp(classType,"Business")==0) base = 6000;
-    else if(strcmp(classType,"First")==0) base = 9000;
-    else base = 3000; // default
-
-    float factor = 1;
-    if(strcmp(tripType,"Round")==0) factor = 1.8;
-    else if(strcmp(tripType,"Multi")==0) factor = 2.5;
-
-    float total = base * factor;
-
-    if(isStudent) total *= 0.8;
-
-    if(age < 12) total *= 0.5;
-    else if(age >= 60) total *= 0.7;
-
-    return total;
+int isValidName(char *name) {
+    if (name[0]=='\0') return 0;
+    for(int i=0;name[i];i++)
+        if(!isalpha((unsigned char)name[i]) && name[i]!=' ') return 0;
+    return 1;
 }
 
-/* -------------------- Flight find -------------------- */
-Flight* findFlight(int id) {
-    for(int i=0;i<4;i++)
-        if(flights[i].flightID==id) return &flights[i];
+int validateUPI(char *upi) {
+    char *p = strchr(upi,'@');
+    if(!p || p==upi || p[1]=='\0') return 0;
+    return 1;
+}
+
+int validateClass(char *c){
+    return (!strcasecmp(c,"Economy") || !strcasecmp(c,"Business") || !strcasecmp(c,"First"));
+}
+
+int validateTrip(char *t){
+    return (!strcasecmp(t,"Single") || !strcasecmp(t,"Round") || !strcasecmp(t,"Multi"));
+}
+
+void generateSeatNumber(Flight *f, char *seat){
+    int n = f->bookedSeats+1;
+    int row = (n-1)/4 + 1;
+    char col = 'A' + (n-1)%4;
+    sprintf(seat,"%d%c",row,col);
+}
+
+float calculateAmount(char *c, char *t, int st, int age, float *disc){
+    float base=0;
+    if(!strcasecmp(c,"Economy")) base=3000;
+    else if(!strcasecmp(c,"Business")) base=6000;
+    else base=9000;
+
+    float f=1;
+    if(!strcasecmp(t,"Round")) f=1.8;
+    else if(!strcasecmp(t,"Multi")) f=2.5;
+
+    float p=base*f;
+    *disc=0;
+
+    if(st){ p*=0.8; *disc+=20; }
+    if(age<12){ p*=0.5; *disc+=50; }
+    else if(age>=60){ p*=0.7; *disc+=30; }
+
+    return p;
+}
+
+void showLoading(){
+    printf("Processing Payment:\n");
+    for(int i=0;i<=20;i++){
+        printf("\r[");
+        for(int j=0;j<i;j++) printf("█");
+        for(int j=i;j<20;j++) printf("░");
+        printf("] %d%%",i*5);
+        fflush(stdout);
+#ifdef _WIN32
+        Sleep(40);
+#else
+        usleep(40000);
+#endif
+    }
+    printf("\nPayment Successful ✅\n");
+}
+
+Flight *findFlight(int id){
+    for(int i=0;i<4;i++) if(flights[i].flightID==id) return &flights[i];
     return NULL;
 }
 
-/* -------------------- Booking -------------------- */
-void bookSeat() {
-    int flightID;
-    char from[50], to[50];
+void cancelSeat(){
+    printf("Enter Passenger ID: ");
+    int id = readInt();
 
-    printf("\nAvailable Flights:\n");
+    Passenger *p=head,*prev=NULL;
+
+    while(p){
+        if(p->passengerID==id){
+            Flight *f = findFlight(p->flightID);
+            if(f) f->bookedSeats--;
+
+            if(prev) prev->next = p->next;
+            else head = p->next;
+
+            printf("\n✅ Ticket Cancelled Successfully!\n");
+            printf("Passenger: %s | Seat: %s\n",p->name,p->seatNumber);
+
+            free(p);
+            return;
+        }
+        prev=p;
+        p=p->next;
+    }
+
+    printf("❌ Passenger ID Not Found!\n");
+}
+
+void printTicket(Passenger *p){
+    char file[50];
+    sprintf(file,"ticket_%d.txt",p->passengerID);
+    FILE *fp=fopen(file,"w");
+    if(!fp){ printf("Error creating ticket!\n"); return; }
+
+    fprintf(fp,"----- FLIGHT TICKET -----\n");
+    fprintf(fp,"Passenger ID : %d\n",p->passengerID);
+    fprintf(fp,"Name         : %s\n",p->name);
+    fprintf(fp,"Seat No      : %s\n",p->seatNumber);
+    fprintf(fp,"From         : %s\n",p->from);
+    fprintf(fp,"To           : %s\n",p->to);
+    fprintf(fp,"Flight ID    : %d\n",p->flightID);
+    fprintf(fp,"Amount       : %.2f\n",p->amount);
+    fclose(fp);
+
+    printf("Ticket Generated: %s ✅\n",file);
+}
+
+/* ✅ NEW BILL PRINTING FUNCTION */
+void printBill(Passenger *p) {
+    printf("\n---------------- FLIGHT BILL ----------------\n");
+    printf("Passenger ID   : %d\n", p->passengerID);
+    printf("Name           : %s\n", p->name);
+    printf("Age            : %d\n", p->age);
+    printf("From           : %s\n", p->from);
+    printf("To             : %s\n", p->to);
+    printf("Flight ID      : %d\n", p->flightID);
+    printf("Class          : %s\n", p->classType);
+    printf("Trip Type      : %s\n", p->tripType);
+    printf("Seat Number    : %s\n", p->seatNumber);
+    printf("----------------------------------------------\n");
+    printf("Base Amount    : ₹%.2f\n", p->amount / (1 - (p->discountPercent / 100)));
+    printf("Discount       : %.0f%%\n", p->discountPercent);
+    printf("Final Amount   : ₹%.2f\n", p->amount);
+    printf("Payment Method : %s\n", p->paymentMethod);
+    printf("----------------------------------------------\n");
+    printf("✅ BILL GENERATED SUCCESSFULLY\n");
+    printf("----------------------------------------------\n");
+}
+
+
+/* BOOKING */
+void bookSeat(){
+    printf("\nFlights:\n");
     for(int i=0;i<4;i++)
-        printf("%d. %s (%s) [Seats Left: %d]\n",
-               flights[i].flightID, flights[i].flightName,
-               flights[i].route, MAX_SEATS - flights[i].bookedSeats);
+        printf("%d. %s (%s) Seats Left: %d\n",
+            flights[i].flightID, flights[i].flightName,
+            flights[i].route, MAX_SEATS-flights[i].bookedSeats);
 
-    printf("\nEnter Flight ID to book: ");
-    flightID = readInt();
-    Flight *f = findFlight(flightID);
-    if(!f){ printf("Invalid Flight ID!\n"); return; }
+    printf("Enter Flight ID: ");
+    int id = readInt();
 
-    printf("Enter FROM place: ");
-    readLine(from, sizeof(from));
-    printf("Enter TO place: ");
-    readLine(to, sizeof(to));
+    Flight *f = findFlight(id);
+    if(!f){ printf("Invalid Flight!\n"); return; }
 
-    char fullRoute[100];
-    snprintf(fullRoute, sizeof(fullRoute), "%s → %s", from, to);
+    char from[50],to[50];
+    printf("From: "); readLine(from,50);
+    printf("To  : "); readLine(to,50);
 
-    if(strcmp(f->route, fullRoute)!=0){
-        printf("Flight route mismatch! Booking cancelled.\n");
+    char rt[150];
+    sprintf(rt,"%s → %s",from,to);
+
+    if(strcasecmp(rt,f->route)){
+        printf("Route mismatch!\n");
         return;
     }
 
-    printf("Enter number of passengers: ");
-    int numPassengers = readInt();
+    printf("How many passengers? ");
+    int n=readInt();
 
-    if(f->bookedSeats + numPassengers > MAX_SEATS){
-        printf("Not enough seats available! Only %d seats left.\n",
-               MAX_SEATS - f->bookedSeats);
+    if(f->bookedSeats+n>MAX_SEATS){
+        printf("Not enough seats!\n");
         return;
     }
 
-    for(int i=0;i<numPassengers;i++){
-        Passenger *p = (Passenger*)malloc(sizeof(Passenger));
-        if(!p){ printf("Memory error\n"); return; }
-        memset(p, 0, sizeof(Passenger)); // initialize
+    while(n--){
+        Passenger *p = malloc(sizeof(Passenger));
+        memset(p,0,sizeof(Passenger));
+
         p->passengerID = nextPassengerID++;
-        p->flightID = flightID;
-        strncpy(p->from, from, sizeof(p->from)-1);
-        strncpy(p->to, to, sizeof(p->to)-1);
+        p->flightID = id;
+        strcpy(p->from,from);
+        strcpy(p->to,to);
 
-        printf("\nPassenger %d Name: ", i+1);
-        readLine(p->name, sizeof(p->name));
+        while(1){
+            printf("Passenger Name: ");
+            readLine(p->name,50);
+            if(isValidName(p->name)) break;
+            printf("Invalid Name!\n");
+        }
 
-        printf("Age: ");
-        p->age = readInt();
+        while(1){
+            printf("Age: ");
+            p->age = readInt();
+            if(p->age>0 && p->age<=120) break;
+            printf("Invalid age!\n");
+        }
 
-        printf("Class (Economy/Business/First): ");
-        readLine(p->classType, sizeof(p->classType));
+        while(1){
+            printf("Class (Economy/Business/First): ");
+            readLine(p->classType,20);
+            if(validateClass(p->classType)) break;
+            printf("Invalid class!\n");
+        }
 
-        printf("Trip Type (Single/Round/Multi): ");
-        readLine(p->tripType, sizeof(p->tripType));
+        while(1){
+            printf("Trip (Single/Round/Multi): ");
+            readLine(p->tripType,20);
+            if(validateTrip(p->tripType)) break;
+        }
 
-        printf("Are you a Student? (1-Yes / 0-No): ");
+        printf("Student? 1/0: ");
         p->isStudent = readInt();
 
         if(p->isStudent){
-            printf("College Name: ");
-            readLine(p->collegeName, sizeof(p->collegeName));
+            printf("Enter College Name: "); readLine(p->collegeName,100);
+            printf("Roll No: "); readLine(p->collegeRoll,20);
+            printf("District: "); readLine(p->collegeDistrict,50);
+            printf("State: "); readLine(p->collegeState,50);
 
-            printf("Roll No: ");
-            readLine(p->collegeRoll, sizeof(p->collegeRoll));
-
-            printf("District: ");
-            readLine(p->collegeDistrict, sizeof(p->collegeDistrict));
-
-            printf("State: ");
-            readLine(p->collegeState, sizeof(p->collegeState));
-        } else {
-            strcpy(p->collegeName,"-");
-            strcpy(p->collegeRoll,"-");
-            strcpy(p->collegeDistrict,"-");
-            strcpy(p->collegeState,"-");
+            if(strlen(p->collegeName)==0 || strlen(p->collegeRoll)==0){
+                printf("Student details incomplete → No discount applied!\n");
+                p->isStudent=0;
+            }
         }
 
-        p->amount = calculateAmount(p->classType, p->tripType, p->isStudent, p->age);
+        p->amount = calculateAmount(p->classType,p->tripType,
+                                    p->isStudent,p->age,&p->discountPercent);
 
-        /* Payment details */
-        printf("\nSelect Payment Method:\n");
-        printf("1. Google Pay\n2. Paytm\n3. Net Banking\nEnter choice: ");
-        int payChoice = readInt();
+        generateSeatNumber(f,p->seatNumber);
 
-        switch(payChoice) {
-            case 1:
-                strncpy(p->paymentMethod, "Google Pay", sizeof(p->paymentMethod)-1);
-                printf("Enter UPI ID (example: name@bank): ");
-                readLine(p->upiID, sizeof(p->upiID));
-                strcpy(p->bankName, "-"); strcpy(p->accountNumber, "-"); strcpy(p->ifscCode, "-");
-                break;
-            case 2:
-                strncpy(p->paymentMethod, "Paytm", sizeof(p->paymentMethod)-1);
-                printf("Enter Paytm UPI ID (example: mobile@paytm): ");
-                readLine(p->upiID, sizeof(p->upiID));
-                strcpy(p->bankName, "-"); strcpy(p->accountNumber, "-"); strcpy(p->ifscCode, "-");
-                break;
-            case 3:
-                strncpy(p->paymentMethod, "Net Banking", sizeof(p->paymentMethod)-1);
-                printf("Enter Bank Name: ");
-                readLine(p->bankName, sizeof(p->bankName));
-                printf("Enter Account Number: ");
-                readLine(p->accountNumber, sizeof(p->accountNumber));
-                printf("Enter IFSC Code: ");
-                readLine(p->ifscCode, sizeof(p->ifscCode));
-                strcpy(p->upiID, "-");
-                break;
-            default:
-                strncpy(p->paymentMethod, "Unknown", sizeof(p->paymentMethod)-1);
-                strcpy(p->upiID, "-"); strcpy(p->bankName, "-"); strcpy(p->accountNumber, "-"); strcpy(p->ifscCode, "-");
-                break;
+        printf("Payment Method: 1.GPay 2.Paytm 3.NetBanking\n");
+        int pay = readInt();
+
+        if(pay==1 || pay==2){
+            strcpy(p->paymentMethod, pay==1 ? "Google Pay" : "Paytm");
+            while(1){
+                printf("UPI ID: ");
+                readLine(p->upiID,50);
+                if(validateUPI(p->upiID)) break;
+                printf("INVALID UPI\n");
+            }
+        }else{
+            strcpy(p->paymentMethod,"Net Banking");
+            printf("Bank: "); readLine(p->bankName,50);
+            printf("Account No: "); readLine(p->accountNumber,30);
+            printf("IFSC: "); readLine(p->ifscCode,20);
         }
 
-        printf("\nProcessing payment via %s...\n", p->paymentMethod);
-        printf("Payment of ₹%.2f successful!\n", p->amount);
+        showLoading();
+
+        p->next=head;
+        head=p;
 
         f->bookedSeats++;
-        p->next = head;
-        head = p;
 
-        printf("Passenger %d booked successfully. Amount: ₹%.2f\n", i+1, p->amount);
+        printf("✅ Booking Successful for %s!\n",p->name);
+        printf("Seat: %s | Amount: %.2f | Discount: %.0f%%\n",
+               p->seatNumber,p->amount,p->discountPercent);
+
+        printTicket(p);
+
+        printBill(p);   // ✅ ADDED BILL PRINTING HERE
     }
-
-    printf("\nAll %d passengers booked successfully!\n", numPassengers);
 }
 
-/* -------------------- Cancel -------------------- */
-void cancelSeat() {
-    printf("Enter Passenger ID to cancel: ");
-    int id = readInt();
+void searchPassenger(){
+    printf("1. Search By ID\n2. Search By Name\nEnter: ");
+    int ch=readInt();
 
-    Passenger *prev=NULL,*curr=head;
-    while(curr){
-        if(curr->passengerID==id){
-            Flight *f=findFlight(curr->flightID);
-            if(f) f->bookedSeats--;
-            if(prev) prev->next = curr->next;
-            else head = curr->next;
-            free(curr);
-            printf("Booking Cancelled!\n");
-            return;
+    Passenger *p=head;
+    if(ch==1){
+        printf("Enter ID: ");
+        int id=readInt();
+        while(p){
+            if(p->passengerID==id){
+                printf("FOUND: %s | Seat %s\n",p->name,p->seatNumber);
+                return;
+            }
+            p=p->next;
         }
-        prev=curr;
-        curr=curr->next;
+    }else{
+        char n[50];
+        printf("Enter Name: ");
+        readLine(n,50);
+        while(p){
+            if(!strcasecmp(p->name,n)){
+                printf("FOUND: %s | Seat %s\n",p->name,p->seatNumber);
+                return;
+            }
+            p=p->next;
+        }
     }
-    printf("Passenger ID not found!\n");
+
+    printf("Not Found!\n");
 }
 
-/* -------------------- View seats -------------------- */
-void viewAvailableSeats() {
-    printf("\nAvailable Seats per Flight:\n");
+void viewAvailableSeats(){
     for(int i=0;i<4;i++)
         printf("%d - %s : %d seats left\n",
-               flights[i].flightID, flights[i].flightName,
-               MAX_SEATS - flights[i].bookedSeats);
+            flights[i].flightID, flights[i].flightName,
+            MAX_SEATS-flights[i].bookedSeats);
 }
 
-/* -------------------- Display list -------------------- */
-void displayPassengerList() {
-    if(!head){ printf("No passengers booked yet.\n"); return; }
-    Passenger *p=head;
-    printf("\nPassenger List:\n");
-    while(p){
-        printf("\nID:%d | Name:%s | Age:%d | Flight:%d | From:%s | To:%s\n",
-               p->passengerID,p->name,p->age,p->flightID,p->from,p->to);
-        printf("Class:%s | Trip:%s | Amount:₹%.2f\n",
-               p->classType,p->tripType,p->amount);
-        printf("Payment Method: %s\n", p->paymentMethod);
-
-        if(strcmp(p->paymentMethod,"Net Banking")==0)
-            printf("Bank: %s | Acc No: %s | IFSC: %s\n", p->bankName, p->accountNumber, p->ifscCode);
-        else if(strcmp(p->paymentMethod,"Google Pay")==0 || strcmp(p->paymentMethod,"Paytm")==0)
-            printf("UPI ID: %s\n", p->upiID);
-
-        if(p->isStudent)
-            printf("Student: YES | College:%s | Roll:%s | District:%s | State:%s\n",
-                   p->collegeName,p->collegeRoll,p->collegeDistrict,p->collegeState);
-        else
-            printf("Student: NO\n");
-        p=p->next;
-    }
-}
-
-/* -------------------- Main -------------------- */
-int main() {
+int main(){
     while(1){
-        printf("\n==== Airline Seat Reservation ====\n");
-        printf("1. Book Seat\n2. Cancel Booking\n3. View Available Seats\n4. Display Passenger List\n5. Exit\nEnter choice: ");
-        int choice = readInt();
-        switch(choice){
+        printf("\n----- AIRLINE SYSTEM -----\n");
+        printf("1. Book Seat\n");
+        printf("2. Search Passenger\n");
+        printf("3. View Available Seats\n");
+        printf("4. Cancel Seat\n");
+        printf("5. Exit\n");
+        printf("Enter Choice: ");
+
+        int c=readInt();
+
+        switch(c){
             case 1: bookSeat(); break;
-            case 2: cancelSeat(); break;
+            case 2: searchPassenger(); break;
             case 3: viewAvailableSeats(); break;
-            case 4: displayPassengerList(); break;
+            case 4: cancelSeat(); break;
             case 5: exit(0);
-            default: printf("Invalid choice!\n");
+            default: printf("Invalid Choice!\n");
         }
     }
-    return 0;
 }
