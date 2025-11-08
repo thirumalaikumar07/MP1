@@ -5,15 +5,16 @@
 #include <time.h>
 
 #ifdef _WIN32
-    #include <windows.h>
-    #define strcasecmp _stricmp
+#include <windows.h>
+#define strcasecmp _stricmp
 #else
-    #include <unistd.h>
-    #include <strings.h>
+#include <unistd.h>
+#include <strings.h>
 #endif
 
 #define MAX_SEATS 20
 
+// ------------------ AIRLINE SYSTEM ------------------
 typedef struct Passenger {
     int passengerID;
     char name[50];
@@ -29,16 +30,8 @@ typedef struct Passenger {
     float discountPercent;
     char seatNumber[10];
 
-    char collegeName[100];
-    char collegeRoll[20];
-    char collegeDistrict[50];
-    char collegeState[50];
-
-    char paymentMethod[30];
-    char upiID[50];
-    char bankName[50];
-    char accountNumber[30];
-    char ifscCode[20];
+    char username[30];  // login username
+    char password[30];  // login password
 
     struct Passenger *next;
 } Passenger;
@@ -60,7 +53,7 @@ Flight flights[4] = {
 Passenger *head = NULL;
 int nextPassengerID = 1;
 
-// Utility functions
+// ------------------ UTILITY FUNCTIONS ------------------
 void readLine(char *b, int s){
     if (!fgets(b, s, stdin)) { b[0]=0; return; }
     b[strcspn(b,"\n")] = 0;
@@ -80,12 +73,6 @@ int isValidName(char *name) {
     if (name[0]=='\0') return 0;
     for(int i=0;name[i];i++)
         if(!isalpha((unsigned char)name[i]) && name[i]!=' ') return 0;
-    return 1;
-}
-
-int validateUPI(char *upi) {
-    char *p = strchr(upi,'@');
-    if(!p || p==upi || p[1]=='\0') return 0;
     return 1;
 }
 
@@ -146,42 +133,14 @@ Flight *findFlight(int id){
     return NULL;
 }
 
-// Cancel seat
-void cancelSeat(){
-    printf("Enter Passenger ID: ");
-    int id = readInt();
-
-    Passenger *p=head,*prev=NULL;
-
-    while(p){
-        if(p->passengerID==id){
-            Flight *f = findFlight(p->flightID);
-            if(f) f->bookedSeats--;
-
-            if(prev) prev->next = p->next;
-            else head = p->next;
-
-            printf("\n✅ Ticket Cancelled Successfully!\n");
-            printf("Passenger: %s | Seat: %s\n",p->name,p->seatNumber);
-
-            free(p);
-            return;
-        }
-        prev=p;
-        p=p->next;
-    }
-
-    printf("❌ Passenger ID Not Found!\n");
-}
-
-// Print ticket with timestamp
+// ------------------ TICKET & BILL ------------------
 void printTicket(Passenger *p){
     char file[50];
     sprintf(file,"ticket_%d.txt",p->passengerID);
     FILE *fp=fopen(file,"w");
-    if(!fp){ 
-        printf("Error creating ticket!\n"); 
-        return; 
+    if(!fp){
+        printf("Error creating ticket!\n");
+        return;
     }
 
     time_t t = time(NULL);
@@ -204,7 +163,6 @@ void printTicket(Passenger *p){
     printf("Ticket Generated: %s ✅\n",file);
 }
 
-// Print bill
 void printBill(Passenger *p) {
     printf("\n---------------- FLIGHT BILL ----------------\n");
     printf("Passenger ID   : %d\n", p->passengerID);
@@ -220,13 +178,12 @@ void printBill(Passenger *p) {
     printf("Base Amount    : ₹%.2f\n", p->amount / (1 - (p->discountPercent / 100)));
     printf("Discount       : %.0f%%\n", p->discountPercent);
     printf("Final Amount   : ₹%.2f\n", p->amount);
-    printf("Payment Method : %s\n", p->paymentMethod);
     printf("----------------------------------------------\n");
     printf("✅ BILL GENERATED SUCCESSFULLY\n");
     printf("----------------------------------------------\n");
 }
 
-// Booking
+// ------------------ BOOKING ------------------
 void bookSeat(){
     printf("\nFlights:\n");
     for(int i=0;i<4;i++)
@@ -299,40 +256,16 @@ void bookSeat(){
         printf("Student? 1/0: ");
         p->isStudent = readInt();
 
-        if(p->isStudent){
-            printf("Enter College Name: "); readLine(p->collegeName,100);
-            printf("Roll No: "); readLine(p->collegeRoll,20);
-            printf("District: "); readLine(p->collegeDistrict,50);
-            printf("State: "); readLine(p->collegeState,50);
-
-            if(strlen(p->collegeName)==0 || strlen(p->collegeRoll)==0){
-                printf("Student details incomplete → No discount applied!\n");
-                p->isStudent=0;
-            }
-        }
-
         p->amount = calculateAmount(p->classType,p->tripType,
                                     p->isStudent,p->age,&p->discountPercent);
 
         generateSeatNumber(f,p->seatNumber);
 
-        printf("Payment Method: 1.GPay 2.Paytm 3.NetBanking\n");
-        int pay = readInt();
-
-        if(pay==1 || pay==2){
-            strcpy(p->paymentMethod, pay==1 ? "Google Pay" : "Paytm");
-            while(1){
-                printf("UPI ID: ");
-                readLine(p->upiID,50);
-                if(validateUPI(p->upiID)) break;
-                printf("INVALID UPI\n");
-            }
-        }else{
-            strcpy(p->paymentMethod,"Net Banking");
-            printf("Bank: "); readLine(p->bankName,50);
-            printf("Account No: "); readLine(p->accountNumber,30);
-            printf("IFSC: "); readLine(p->ifscCode,20);
-        }
+        // ------------------ Create Login for Passenger ------------------
+        printf("Create username for login: ");
+        readLine(p->username,30);
+        printf("Create password: ");
+        readLine(p->password,30);
 
         showLoading();
 
@@ -350,39 +283,7 @@ void bookSeat(){
     }
 }
 
-// Search passenger
-void searchPassenger(){
-    printf("1. Search By ID\n2. Search By Name\nEnter: ");
-    int ch=readInt();
-
-    Passenger *p=head;
-    if(ch==1){
-        printf("Enter ID: ");
-        int id=readInt();
-        while(p){
-            if(p->passengerID==id){
-                printf("FOUND: %s | Seat %s\n",p->name,p->seatNumber);
-                return;
-            }
-            p=p->next;
-        }
-    }else{
-        char n[50];
-        printf("Enter Name: ");
-        readLine(n,50);
-        while(p){
-            if(!strcasecmp(p->name,n)){
-                printf("FOUND: %s | Seat %s\n",p->name,p->seatNumber);
-                return;
-            }
-            p=p->next;
-        }
-    }
-
-    printf("Not Found!\n");
-}
-
-// View available seats
+// ------------------ SEARCH & VIEW ------------------
 void viewAvailableSeats(){
     for(int i=0;i<4;i++)
         printf("%d - %s : %d seats left\n",
@@ -390,16 +291,91 @@ void viewAvailableSeats(){
             MAX_SEATS-flights[i].bookedSeats);
 }
 
-// Main
+void cancelSeat(){
+    printf("Enter Passenger ID: ");
+    int id = readInt();
+
+    Passenger *p=head,*prev=NULL;
+
+    while(p){
+        if(p->passengerID==id){
+            Flight *f = findFlight(p->flightID);
+            if(f) f->bookedSeats--;
+
+            if(prev) prev->next = p->next;
+            else head = p->next;
+
+            printf("\n✅ Ticket Cancelled Successfully!\n");
+            printf("Passenger: %s | Seat: %s\n",p->name,p->seatNumber);
+
+            free(p);
+            return;
+        }
+        prev=p;
+        p=p->next;
+    }
+
+    printf("❌ Passenger ID Not Found!\n");
+}
+
+// ------------------ PASSENGER LOGIN ------------------
+Passenger* passengerLogin(){
+    char uname[30], pass[30];
+    printf("----- PASSENGER LOGIN -----\n");
+
+    for(int attempts=3; attempts>0; attempts--){
+        printf("Username: "); readLine(uname,30);
+        printf("Password: "); readLine(pass,30);
+
+        Passenger* p = head;
+        while(p){
+            if(strcmp(p->username,uname)==0 && strcmp(p->password,pass)==0){
+                printf("✅ Login Successful! Welcome %s\n", p->name);
+                return p; // Return the passenger object
+            }
+            p=p->next;
+        }
+
+        printf("❌ Invalid credentials! Attempts left: %d\n", attempts-1);
+    }
+
+    return NULL;
+}
+
+void passengerMenu(Passenger* p){
+    while(1){
+        printf("\n----- PASSENGER MENU -----\n");
+        printf("1. View Ticket\n");
+        printf("2. View Bill\n");
+        printf("3. Exit\n");
+        printf("Enter Choice: ");
+        int c = readInt();
+
+        switch(c){
+            case 1:
+                printTicket(p);
+                break;
+            case 2:
+                printBill(p);
+                break;
+            case 3:
+                return;
+            default:
+                printf("Invalid choice!\n");
+        }
+    }
+}
+
+// ------------------ MAIN MENU ------------------
 int main(){
-    #ifdef _WIN32
-        SetConsoleOutputCP(CP_UTF8);
-    #endif
+#ifdef _WIN32
+    SetConsoleOutputCP(CP_UTF8);
+#endif
 
     while(1){
-        printf("\n----- AIRLINE SYSTEM -----\n");
-        printf("1. Book Seat\n");
-        printf("2. Search Passenger\n");
+        printf("\n----- AIRLINE SYSTEM MAIN MENU -----\n");
+        printf("1. Book Seat (Create Account)\n");
+        printf("2. Passenger Login\n");
         printf("3. View Available Seats\n");
         printf("4. Cancel Seat\n");
         printf("5. Exit\n");
@@ -409,7 +385,11 @@ int main(){
 
         switch(c){
             case 1: bookSeat(); break;
-            case 2: searchPassenger(); break;
+            case 2: {
+                Passenger* p = passengerLogin();
+                if(p) passengerMenu(p);
+                else printf("❌ Login Failed!\n");
+            } break;
             case 3: viewAvailableSeats(); break;
             case 4: cancelSeat(); break;
             case 5: exit(0);
