@@ -2,15 +2,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
-#include <windows.h>
-
+#include <time.h>
 
 #ifdef _WIN32
-  #include <windows.h>
-  #define strcasecmp _stricmp
+    #include <windows.h>
+    #define strcasecmp _stricmp
 #else
-  #include <unistd.h>
-  #include <strings.h>
+    #include <unistd.h>
+    #include <strings.h>
 #endif
 
 #define MAX_SEATS 20
@@ -61,6 +60,7 @@ Flight flights[4] = {
 Passenger *head = NULL;
 int nextPassengerID = 1;
 
+// Utility functions
 void readLine(char *b, int s){
     if (!fgets(b, s, stdin)) { b[0]=0; return; }
     b[strcspn(b,"\n")] = 0;
@@ -146,6 +146,7 @@ Flight *findFlight(int id){
     return NULL;
 }
 
+// Cancel seat
 void cancelSeat(){
     printf("Enter Passenger ID: ");
     int id = readInt();
@@ -173,11 +174,18 @@ void cancelSeat(){
     printf("❌ Passenger ID Not Found!\n");
 }
 
+// Print ticket with timestamp
 void printTicket(Passenger *p){
     char file[50];
     sprintf(file,"ticket_%d.txt",p->passengerID);
     FILE *fp=fopen(file,"w");
-    if(!fp){ printf("Error creating ticket!\n"); return; }
+    if(!fp){ 
+        printf("Error creating ticket!\n"); 
+        return; 
+    }
+
+    time_t t = time(NULL);
+    struct tm tm = *localtime(&t);
 
     fprintf(fp,"----- FLIGHT TICKET -----\n");
     fprintf(fp,"Passenger ID : %d\n",p->passengerID);
@@ -187,12 +195,16 @@ void printTicket(Passenger *p){
     fprintf(fp,"To           : %s\n",p->to);
     fprintf(fp,"Flight ID    : %d\n",p->flightID);
     fprintf(fp,"Amount       : %.2f\n",p->amount);
+    fprintf(fp,"Date & Time  : %04d-%02d-%02d %02d:%02d:%02d\n",
+            tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday,
+            tm.tm_hour, tm.tm_min, tm.tm_sec);
+
     fclose(fp);
 
     printf("Ticket Generated: %s ✅\n",file);
 }
 
-/* ✅ NEW BILL PRINTING FUNCTION */
+// Print bill
 void printBill(Passenger *p) {
     printf("\n---------------- FLIGHT BILL ----------------\n");
     printf("Passenger ID   : %d\n", p->passengerID);
@@ -214,8 +226,7 @@ void printBill(Passenger *p) {
     printf("----------------------------------------------\n");
 }
 
-
-/* BOOKING */
+// Booking
 void bookSeat(){
     printf("\nFlights:\n");
     for(int i=0;i<4;i++)
@@ -335,11 +346,11 @@ void bookSeat(){
                p->seatNumber,p->amount,p->discountPercent);
 
         printTicket(p);
-
-        printBill(p);   // ✅ ADDED BILL PRINTING HERE
+        printBill(p);
     }
 }
 
+// Search passenger
 void searchPassenger(){
     printf("1. Search By ID\n2. Search By Name\nEnter: ");
     int ch=readInt();
@@ -371,6 +382,7 @@ void searchPassenger(){
     printf("Not Found!\n");
 }
 
+// View available seats
 void viewAvailableSeats(){
     for(int i=0;i<4;i++)
         printf("%d - %s : %d seats left\n",
@@ -378,8 +390,12 @@ void viewAvailableSeats(){
             MAX_SEATS-flights[i].bookedSeats);
 }
 
+// Main
 int main(){
-     SetConsoleOutputCP(CP_UTF8);
+    #ifdef _WIN32
+        SetConsoleOutputCP(CP_UTF8);
+    #endif
+
     while(1){
         printf("\n----- AIRLINE SYSTEM -----\n");
         printf("1. Book Seat\n");

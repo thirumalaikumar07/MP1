@@ -1,7 +1,7 @@
 ----- FLIGHT TICKET -----
-Passenger ID : 1
-Name         : thiru
-Seat No      : 1A
+Passenger ID : 3
+Name         : surya
+Seat No      : 1C
 From         : chennai
 To           : delhi
 Flight ID    : 101
