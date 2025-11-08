@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <windows.h>
+
 
 #ifdef _WIN32
   #include <windows.h>
@@ -377,6 +379,7 @@ void viewAvailableSeats(){
 }
 
 int main(){
+     SetConsoleOutputCP(CP_UTF8);
     while(1){
         printf("\n----- AIRLINE SYSTEM -----\n");
         printf("1. Book Seat\n");

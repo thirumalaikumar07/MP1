@@ -1,8 +1,8 @@
 ----- FLIGHT TICKET -----
 Passenger ID : 1
-Name         : htiru
+Name         : thiru
 Seat No      : 1A
 From         : chennai
 To           : delhi
 Flight ID    : 101
-Amount       : 4500.00
+Amount       : 1500.00
