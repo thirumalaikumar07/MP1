@@ -25,14 +25,11 @@ typedef struct Passenger {
     char tripType[20];
     int flightID;
     float amount;
-
     int isStudent;
     float discountPercent;
     char seatNumber[10];
-
-    char username[30];  // login username
-    char password[30];  // login password
-
+    char username[30];
+    char password[30];
     struct Passenger *next;
 } Passenger;
 
@@ -291,6 +288,7 @@ void viewAvailableSeats(){
             MAX_SEATS-flights[i].bookedSeats);
 }
 
+// ------------------ CANCEL SEAT ------------------
 void cancelSeat(){
     printf("Enter Passenger ID: ");
     int id = readInt();
@@ -366,6 +364,31 @@ void passengerMenu(Passenger* p){
     }
 }
 
+// ------------------ VIEW ALL PASSENGERS ------------------
+void viewAllPassengers() {
+    if (!head) {
+        printf("\nNo passengers booked yet!\n");
+        return;
+    }
+
+    printf("\n----- ALL BOOKED PASSENGERS -----\n");
+    Passenger* p = head;
+    while(p) {
+        printf("Passenger ID : %d\n", p->passengerID);
+        printf("Name         : %s\n", p->name);
+        printf("Age          : %d\n", p->age);
+        printf("From         : %s\n", p->from);
+        printf("To           : %s\n", p->to);
+        printf("Flight ID    : %d\n", p->flightID);
+        printf("Seat No      : %s\n", p->seatNumber);
+        printf("Class        : %s\n", p->classType);
+        printf("Trip Type    : %s\n", p->tripType);
+        printf("Amount       : %.2f\n", p->amount);
+        printf("--------------------------------\n");
+        p = p->next;
+    }
+}
+
 // ------------------ MAIN MENU ------------------
 int main(){
 #ifdef _WIN32
@@ -379,6 +402,7 @@ int main(){
         printf("3. View Available Seats\n");
         printf("4. Cancel Seat\n");
         printf("5. Exit\n");
+        printf("6. View All Passengers\n"); // NEW FEATURE
         printf("Enter Choice: ");
 
         int c=readInt();
@@ -393,6 +417,7 @@ int main(){
             case 3: viewAvailableSeats(); break;
             case 4: cancelSeat(); break;
             case 5: exit(0);
+            case 6: viewAllPassengers(); break; // NEW FEATURE
             default: printf("Invalid Choice!\n");
         }
     }
