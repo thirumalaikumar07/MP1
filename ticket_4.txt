@@ -1,9 +1,9 @@
 ----- FLIGHT TICKET -----
-Passenger ID : 1
-Name         : thiru
+Passenger ID : 4
+Name         : forst
 Seat No      : 1A
 From         : chennai
 To           : delhi
 Flight ID    : 101
-Amount       : 16200.00
-Date & Time  : 2025-11-08 23:02:08
+Amount       : 9000.00
+Date & Time  : 2025-11-08 23:06:27

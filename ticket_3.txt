@@ -1,8 +1,9 @@
 ----- FLIGHT TICKET -----
 Passenger ID : 3
-Name         : surya
-Seat No      : 1C
+Name         : thirumalai
+Seat No      : 1A
 From         : chennai
 To           : delhi
 Flight ID    : 101
 Amount       : 9000.00
+Date & Time  : 2025-11-08 23:04:10
